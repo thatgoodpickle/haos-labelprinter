@@ -77,10 +77,12 @@ def reset_state(printers=2):
     PRINTERS.clear()
     if printers >= 1:
         PRINTERS.append({"entry_id": "p1", "title": "Office", "name": "Office", "transport": "bluetooth", "address": "AA:BB:CC:00:10:01",
-                         "online": True, "reason": "ok", "message": "", "tape_mm": 12, "tape": dict(TAPE12), "state": "idle"})
+                         "online": True, "reason": "ok", "message": "", "tape_mm": 12, "tape": dict(TAPE12), "state": "idle",
+                         "model": None, "has_cutter": True, "tape_pins": None})
     if printers >= 2:
         PRINTERS.append({"entry_id": "p2", "title": "Workshop", "name": "Workshop", "transport": "usb", "serial": "A1B2C3D4",
-                         "online": True, "reason": "ok", "message": "", "tape_mm": 4, "tape": dict(TAPE35), "state": "idle"})
+                         "online": True, "reason": "ok", "message": "", "tape_mm": 4, "tape": dict(TAPE35), "state": "idle",
+                         "model": None, "has_cutter": True, "tape_pins": None})
     SCAN[:] = [
         {"address": "AA:BB:CC:48:21:00", "name": "PT-P710BT4821", "paired": False, "trusted": False, "connected": False, "rssi": -58, "is_printer": True},
         {"address": "AA:BB:CC:00:10:01", "name": "PT-P710BT1001", "paired": True, "trusted": True, "connected": False, "rssi": -49, "is_printer": True},
@@ -119,14 +121,14 @@ def pre_delay(m):
         time.sleep(min(float(m.get("duration", 8)), SW.get("scan_secs", 1.5)))
     elif t == "bluetooth/pair":
         time.sleep(SW.get("pair_secs", 2))
-    elif t in ("bluetooth/connect", "print", "printers/test_print", "printers/add"):
+    elif t in ("bluetooth/connect", "print", "feed", "printers/test_print", "printers/add"):
         p = next((p for p in PRINTERS if p["entry_id"] == m.get("entry_id")), None)
         sleeping = (p is not None and not p["online"]) or (t == "bluetooth/connect" and SW.get("connect") in ("asleep", "busy", "asleep_once"))
         if t == "printers/add":
             sleeping = SW.get("add") in ("asleep", "fail")
         if sleeping:
             time.sleep(SW.get("wake_secs", 3))
-        elif t != "print":
+        elif t not in ("print", "feed"):
             time.sleep(0.4)
 
 
@@ -344,6 +346,13 @@ def handle(m):
             do_preview(m)  # validates
         PRINT_LOG.append({k: v for k, v in m.items() if k != "design"})
         print("[mock] PRINT", PRINT_LOG[-1])
+        return {}
+    if t == "feed":
+        pr = next((p for p in PRINTERS if p["entry_id"] == m.get("entry_id")), PRINTERS[0] if len(PRINTERS) == 1 else None)
+        if pr is not None and not pr["online"]:
+            raise WsError("home_assistant_error", REASON_TEXT.get(pr["reason"], pr.get("message") or "Feeding failed."))
+        PRINT_LOG.append(dict(m))
+        print("[mock] FEED", PRINT_LOG[-1])
         return {}
     if t == "fonts/search":
         q = (m.get("query") or "").lower()

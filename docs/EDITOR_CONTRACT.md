@@ -16,8 +16,8 @@ Hard rules for every piece
 ## 1. Design JSON (version 1)
 
 Coordinates are **dots at 180 dpi** (1 mm = 7.087 dots). Origin top-left of the label. `x` runs along
-the tape length, `y` across the tape width (0 .. pins-1, where pins = `tape_pins(tape_mm)`:
-3.5mm(4)->24, 6->32, 9->50, 12->70, 18->112, 24->128).
+the tape length, `y` across the tape width (0 .. pins-1, where pins = `tape_pins(tape_mm, model)`:
+3.5mm(4)->24, 6->32, 9->50, 12->70, 18->112, 24->128; the PT-P300BT prints 64 on 12 mm).
 
 ```json
 {
@@ -56,7 +56,7 @@ DESIGN_VERSION = 1
 class DesignError(PtouchError)               # invalid design
 def normalize_design(design: dict) -> dict   # fill defaults, clamp, drop junk; raises DesignError on non-dict/bad types
 def render_design(design: dict, tape_mm: int, *, variables: dict | None = None,
-                  assets=None) -> PIL.Image.Image        # mode "1", height == tape_pins(tape_mm)
+                  assets=None, model=None) -> PIL.Image.Image   # mode "1", height == tape_pins(tape_mm, model)
 ```
 `assets` is any object with `font_path(family, weight, italic) -> Path | None` and
 `icon_glyph(name) -> tuple[Path, str] | None` (the `AssetManager` below implements both). If `assets`

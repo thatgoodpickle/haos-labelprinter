@@ -59,6 +59,7 @@ bounded by `wake_timeout` seconds (default 12; 0 means a single attempt).
 | `pairing_timeout` | `AuthenticationTimeout`, or `timeout` expired | Nobody confirmed in time; printer asleep. |
 | `not_found` | address never seen in discovery | Switch on, move close, scan again. |
 | `permission` | `AccessDenied`, "not permitted" | The HA container is not allowed on the bus. |
+| `profile_taken` | `NotPermitted` "UUID already registered" from `RegisterProfile` | Another program holds the Serial Port profile; BlueZ allows one per UUID. The print transport then falls back to a plain RFCOMM socket on the configured channel, so this only surfaces from `btadmin.connect_test`. |
 | `no_dbus` / `no_adapter` / `no_library` | cannot reach the bus or BlueZ / no `Adapter1` / `dbus-fast` missing | HA cannot use Bluetooth here; use USB or the network bridge. |
 | `error` | anything else (e.g. `Input/output error`) | Retry; see logs (debug level shows raw BlueZ text). |
 

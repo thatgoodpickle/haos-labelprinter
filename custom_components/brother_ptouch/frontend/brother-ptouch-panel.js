@@ -33,6 +33,7 @@ class BrotherPtouchPanel extends HTMLElement {
     this.printFlow = PL.newPrintFlow();
     this.s = {
       tapeSel: storage.get("tape", "auto"), entryId: storage.get("entry", ""), copies: 1,
+      chain: storage.get("chain", false), cutMark: storage.get("cutMark", false), autoCut: storage.get("autoCut", true),
       zoom: 3, fit: storage.get("zoomMode", "fit") === "fit", printers: [], printersLoaded: false, designs: [], designsLoaded: false, view: "home", printDone: 0,
       testValues: {}, preview: null, previewUrl: "", error: "", warnings: [],
       busy: "", layout: "wide",
@@ -113,6 +114,7 @@ class BrotherPtouchPanel extends HTMLElement {
 
   /** Re-fetch the printer rows (normalised); keeps the active printer if it still exists. */
   async _refreshPrinters(initial = false) {
+    const pins = this.pins;
     try { this.s.printers = (await this.api.printers()).map(PL.normalizePrinter); }
     catch (e) { if (initial) this._notify(e.message || String(e), "err"); else throw e; }
     finally { this.s.printersLoaded = true; }
@@ -120,6 +122,7 @@ class BrotherPtouchPanel extends HTMLElement {
     if (id !== this.s.entryId) { const had = this.s.entryId; this.s.entryId = id; if (had !== id) this.previewer?.request(); }
     storage.set("entry", this.s.entryId);
     this._renderTop();
+    if (this.pins !== pins) this._renderCanvas();   // the printer's dots per tape can differ
     if (this.printerDrawer && !this.$.layer.hidden && this.$.layer.dataset.mode === "printers") this.printerDrawer.render();
   }
   _selectPrinter(id) { this.s.entryId = id; storage.set("entry", id); this._renderTop(); this.previewer.request(); }
@@ -149,6 +152,16 @@ class BrotherPtouchPanel extends HTMLElement {
     $.chip = h("button", { class: "printer-chip", type: "button", "aria-haspopup": "dialog", onClick: () => this._openPrinters() }, $.chipDot, $.chipName, $.chipStatus, icon("mdi:chevron-down"));
     $.pbar = h("div", { class: "pbar" });
     $.copies = h("input", { type: "number", min: 1, max: 20, value: 1, inputmode: "numeric", "aria-label": t("Copies"), title: t("Copies"), onInput: () => { this.s.copies = Math.min(20, Math.max(1, parseInt($.copies.value) || 1)); } });
+    // cutting and feed: chain, auto cut or cut marks (see cutOption), feed
+    $.chain = h("input", { type: "checkbox", onChange: () => this._setCutting("chain", $.chain.checked) });
+    $.cut = h("input", { type: "checkbox", onChange: () => this._setCutting(this.cutOption.key, $.cut.checked) });
+    $.cutText = h("span");
+    $.cutLabel = h("label", { class: "small tb-check" }, $.cut, $.cutText);
+    $.feed = h("button", { class: "btn", type: "button", title: t("Feed the tape out to cut the last label"), onClick: () => this._feed() },
+      icon("mdi:arrow-expand-right"), h("span", { class: "lbl" }, t("Feed")));
+    $.cutWrap = h("div", { class: "tb-group" },
+      h("label", { class: "small tb-check", title: t("No feed between prints: the next label follows right after this one. The last label stays inside until you print again or feed.") }, $.chain, t("Chain")),
+      $.cutLabel, $.feed);
     $.save = h("button", { class: "btn save", type: "button", "aria-label": t("Save"), onClick: () => this._save() }, icon("mdi:content-save-outline"), h("span", { class: "lbl" }, t("Save")));
     $.print = h("button", { class: "btn primary", type: "button", "aria-label": t("Print"), onClick: () => this._print() }, icon("mdi:printer"), h("span", { class: "lbl" }, t("Print")));
     $.setup = h("button", { class: "btn primary setup-btn", type: "button", "aria-haspopup": "dialog", hidden: true, onClick: () => this._openWizard(false) },
@@ -223,7 +236,7 @@ class BrotherPtouchPanel extends HTMLElement {
     $.dlgAlt = h("button", { class: "btn", type: "button", hidden: true });
     $.dialog = h("div", { class: "dialog", role: "alertdialog", "aria-modal": "true" }, $.dlgText, h("div", { class: "acts" }, $.dlgCancel, $.dlgAlt, $.dlgOk));
     this.m = createMobile(this, t);
-    this.gallery = createGallery({ api: { templatesList: () => this.api.templatesList(), buildTemplate: (id, tape) => this.api.buildTemplate(id, tape), preview: (d, o) => this.api.preview(d, o) },
+    this.gallery = createGallery({ api: { templatesList: () => this.api.templatesList(), buildTemplate: (id, tape) => this.api.buildTemplate(id, tape, this.s.entryId || undefined), preview: (d, o) => this.api.preview(d, { ...o, entry_id: this.s.entryId || undefined }) },
       t, getTape: () => this.tape, onPick: (tpl) => this._newFromTemplate(tpl), onClose: () => this._closeLayer() });
     // the api object is created when hass arrives: components call through this proxy
     const lazy = new Proxy({}, { get: (_, k) => (...a) => this.api[k](...a) });
@@ -232,7 +245,7 @@ class BrotherPtouchPanel extends HTMLElement {
       onClose: () => this._closeLayer(), confirm: (m, o) => this._confirm(m, o) });
     this.wizard = createWizard({ api: lazy, t, getPrinters: () => this.s.printers, refresh: () => this._refreshPrinters(),
       onClose: () => this._closeWizard(), onDone: (id) => this._wizardDone(id) });
-    $.layer = h("div", { class: "layer", hidden: true, onClick: (e) => { if (e.target === $.layer) this._closeLayer(); } }, $.addSheet, $.menuSheet, this.m.printSheet, this.gallery.el, this.printerDrawer.el, this.wizard.el, $.dialog);
+    $.layer = h("div", { class: "layer", hidden: true, onClick: (e) => { if (e.target === $.layer) this._closeLayer(); } }, $.addSheet, $.menuSheet, this.m.printSheet, this.m.cutSheet, this.gallery.el, this.printerDrawer.el, this.wizard.el, $.dialog);
 
     $.body = h("div", { class: "body" }, $.left, $.center, $.right);
     $.root = h("div", { class: "root", "data-view": "edit" }, $.topbar, $.body, this.m.el, $.layer, $.file);
@@ -256,7 +269,7 @@ class BrotherPtouchPanel extends HTMLElement {
     if (narrow) {
       $.ctoolbar.replaceChildren();
     } else {
-      $.topbar.replaceChildren($.menu, $.name, $.dirty, $.gTape, $.gLen, $.spacer, $.hist, $.chip, $.copiesWrap, $.save, $.setup, $.print);
+      $.topbar.replaceChildren($.menu, $.name, $.dirty, $.gTape, $.gLen, $.spacer, $.hist, $.chip, $.copiesWrap, $.cutWrap, $.save, $.setup, $.print);
       $.hist.replaceChildren($.undo, $.redo);
       $.copiesWrap.append($.copies);
       $.gTape.append($.tape); $.gLen.append($.lenMode, $.lenMm);
@@ -368,6 +381,7 @@ class BrotherPtouchPanel extends HTMLElement {
     this._actionSheet(t("Label options"), [
       { icon: "mdi:content-save-outline", label: t("Save"), run: () => this._save(), disabled: !!this.s.busy },
       { icon: "mdi:ruler", label: t("Tape and length"), run: () => { this.store.select(null); this.m.openSheet("label", "half"); } },
+      { icon: "mdi:content-cut", label: t("Cutting and feed"), run: () => { this._openLayer("cut"); this.m.renderCut(); } },
       { icon: "mdi:fit-to-screen-outline", label: t("Fit label to screen"), run: () => this._setZoom("fit") },
       { icon: "mdi:shape-plus-outline", label: t("Start from a template"), run: () => this._openGallery(this.$.more) },
       { icon: "mdi:delete-outline", label: t("Delete this label"), danger: true, disabled: !d.id, run: () => this._deleteDesign({ id: d.id, name: d.name }) },
@@ -408,7 +422,13 @@ class BrotherPtouchPanel extends HTMLElement {
     if (this.s.tapeSel !== "auto") return this.s.tapeSel;
     return this.s.preview?.tape_mm ?? this.printer?.tape_mm ?? 12;
   }
-  get pins() { return G.tapePins(this.tape); }
+  get pins() { return G.tapePins(this.tape, this.printer?.tape_pins); }
+  /** The cut toggle: auto cut on printers with a cutter, cut marks on those without. */
+  get cutOption() {
+    return this.printer?.has_cutter === false
+      ? { key: "cutMark", label: t("Cut marks"), hint: t("Print a cut mark after every label.") }
+      : { key: "autoCut", label: t("Auto cut"), hint: t("Cut the tape after printing.") };
+  }
   get labelW() { const d = this.store.design; return d.elements.length || d.length_mm != null ? G.labelLengthDots(d) : 140; }
   get offX() { return G.contentOffsetX(this.store.design); }
   get zoom() { return this.s.zoom; }
@@ -475,6 +495,10 @@ class BrotherPtouchPanel extends HTMLElement {
     const first = this.s.printersLoaded && !this.s.printers.length;   // first run: no printer yet
     $.root.classList.toggle("first-run", first);
     $.print.disabled = !!this.s.busy || !d.elements.length || this.printFlow.phase === "waiting";
+    const cut = this.cutOption;
+    $.chain.checked = this.s.chain; $.cut.checked = !!this.s[cut.key];
+    $.cutText.textContent = cut.label; $.cutLabel.title = cut.hint;
+    $.feed.disabled = !!this._feeding || this.printFlow.phase === "waiting";
     $.print.classList.toggle("waiting", this.printFlow.phase === "waiting");
     $.save.disabled = !!this.s.busy;
     const sel = this.store.selected;
@@ -1019,7 +1043,8 @@ class BrotherPtouchPanel extends HTMLElement {
   }
   /** Runs one print attempt. The call may block ~20 s while the backend wakes a sleeping printer. */
   async _startPrint() {
-    const req = { design: this.store.design, entry_id: this.s.entryId || undefined, variables: this._testVars(), copies: this.s.copies };
+    const req = { design: this.store.design, entry_id: this.s.entryId || undefined, variables: this._testVars(), copies: this.s.copies,
+      chain: this.s.chain, [this.cutOption.key]: this.s[this.cutOption.key] };
     this._lastPrint = req;
     this.printFlow = PL.startPrint(this.printFlow);
     const id = this.printFlow.id;
@@ -1035,10 +1060,22 @@ class BrotherPtouchPanel extends HTMLElement {
     if (flow.phase === "done") {
       this.printFlow = PL.dismissPrint(flow);
       if (this.s.layout === "narrow" && this.$.layer.dataset.mode === "print") this.s.printDone = req.copies;
-      else this._notify(`${t("Sent to printer")}${req.copies > 1 ? ` (${req.copies}×)` : ""}`, "info");
+      else this._notify(`${t("Sent to printer")}${req.copies > 1 ? ` (${req.copies}×)` : ""}${req.chain ? `. ${t("The label stays inside until the next print or Feed.")}` : ""}`, "info", req.chain ? 5000 : 3500);
     }
     this._renderPrintStrip(); this._renderTop(); this.m.renderPrint();
     this._refreshPrinters().catch(() => {});
+  }
+  _setCutting(key, on) {
+    this.s[key] = on; storage.set(key, on);
+    this._renderTop(); this.m.renderPrint(); this.m.renderCut();
+  }
+  /** Feed the tape out, e.g. to release a chained label. */
+  async _feed() {
+    if (this._feeding) return;
+    this._feeding = true; this._renderTop(); this.m.renderPrint(); this.m.renderCut();
+    try { await this.api.feed(this.s.entryId || undefined); this._notify(t("Tape fed out"), "info", 2500); }
+    catch (e) { this._notify(failureSentence(e, t("Feeding failed.")).text, "err"); }
+    finally { this._feeding = false; this._renderTop(); this.m.renderPrint(); this.m.renderCut(); this._refreshPrinters().catch(() => {}); }
   }
   _cancelPrintWait() {
     this.printFlow = PL.cancelPrint(this.printFlow); clearInterval(this._pTick);
@@ -1090,7 +1127,7 @@ class BrotherPtouchPanel extends HTMLElement {
   }
 
   _add(type, info) {
-    const el = newElement(type, this.store.design, this.tape, info);
+    const el = newElement(type, this.store.design, this.tape, info, this.printer?.tape_pins);
     this._closeLayer();
     this.store.addElement(el);
     if (this.s.layout === "narrow") this.m.openSheet("element", "peek");   // new elements need content: show their fields

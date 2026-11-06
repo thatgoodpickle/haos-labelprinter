@@ -148,6 +148,9 @@
     "button": {
       "connect_bluetooth": {
         "name": "Connect Bluetooth"
+      },
+      "feed": {
+        "name": "Feed tape"
       }
     }
   },
@@ -187,6 +190,14 @@
         "cut_each": {
           "name": "Cut each label",
           "description": "With several copies, cut after every label instead of printing one continuous strip. Wastes tape."
+        },
+        "chain": {
+          "name": "Chain labels",
+          "description": "Don't feed the tape out at the end, so the next label follows right after this one. The label stays in the printer until the next print or Feed tape."
+        },
+        "cut_mark": {
+          "name": "Cut marks",
+          "description": "Printers without a cutter: print a cut mark after every label."
         },
         "margin_mm": {
           "name": "Feed margin",
@@ -230,6 +241,14 @@
           "name": "Cut each label",
           "description": "With several copies, cut after every label instead of printing one continuous strip. Wastes tape."
         },
+        "chain": {
+          "name": "Chain labels",
+          "description": "Don't feed the tape out at the end, so the next label follows right after this one. The label stays in the printer until the next print or Feed tape."
+        },
+        "cut_mark": {
+          "name": "Cut marks",
+          "description": "Printers without a cutter: print a cut mark after every label."
+        },
         "margin_mm": {
           "name": "Feed margin",
           "description": "Blank tape fed before/after the label."
@@ -268,6 +287,14 @@
           "name": "Cut each label",
           "description": "With several copies, cut after every label instead of printing one continuous strip. Wastes tape."
         },
+        "chain": {
+          "name": "Chain labels",
+          "description": "Don't feed the tape out at the end, so the next label follows right after this one. The label stays in the printer until the next print or Feed tape."
+        },
+        "cut_mark": {
+          "name": "Cut marks",
+          "description": "Printers without a cutter: print a cut mark after every label."
+        },
         "margin_mm": {
           "name": "Feed margin",
           "description": "Blank tape fed before/after the label."
@@ -301,6 +328,14 @@
         "cut_each": {
           "name": "Cut each label",
           "description": "With several copies, cut after every label instead of printing one continuous strip. Wastes tape."
+        },
+        "chain": {
+          "name": "Chain labels",
+          "description": "Don't feed the tape out at the end, so the next label follows right after this one. The label stays in the printer until the next print or Feed tape."
+        },
+        "cut_mark": {
+          "name": "Cut marks",
+          "description": "Printers without a cutter: print a cut mark after every label."
         },
         "margin_mm": {
           "name": "Feed margin",

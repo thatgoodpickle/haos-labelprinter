@@ -22,6 +22,8 @@ COMMON = {
     vol.Optional("auto_cut", default=True): cv.boolean,
     vol.Optional("cut_each", default=False): cv.boolean,
     vol.Optional("margin_mm", default=2.0): vol.All(vol.Coerce(float), vol.Range(min=0, max=50)),
+    vol.Optional("chain", default=False): cv.boolean,
+    vol.Optional("cut_mark", default=False): cv.boolean,
 }
 FONT = {
     vol.Optional("font_size"): vol.All(vol.Coerce(int), vol.Range(min=6, max=200)),
@@ -67,9 +69,7 @@ def _coordinator(hass: HomeAssistant, call: ServiceCall) -> PTouchCoordinator:
 
 
 def _job_args(call: ServiceCall) -> dict:
-    return {"copies": call.data["copies"], "auto_cut": call.data["auto_cut"],
-            "cut_each": call.data["cut_each"],
-            "margin_mm": call.data["margin_mm"]}
+    return {k: call.data[k] for k in ("copies", "auto_cut", "cut_each", "margin_mm", "chain", "cut_mark")}
 
 
 def _check_font(hass: HomeAssistant, call: ServiceCall) -> str | None:
@@ -110,18 +110,18 @@ def async_register_services(hass: HomeAssistant) -> None:
         coord = _coordinator(hass, call)
         font = _check_font(hass, call)
         await coord.async_print(
-            lambda mm: [render_text(call.data["text"], mm, font_size=call.data.get("font_size"),
-                                    font_path=font, align=call.data["align"])],
+            lambda mm, model: [render_text(call.data["text"], mm, font_size=call.data.get("font_size"),
+                                           font_path=font, align=call.data["align"], model=model)],
             **_job_args(call))
 
     async def print_qr(call: ServiceCall) -> None:
         coord = _coordinator(hass, call)
         font = _check_font(hass, call)
 
-        def render(mm: int):
+        def render(mm: int, model: int):
             try:
                 return [render_qr(call.data["data"], mm, text=call.data.get("text"),
-                                  font_size=call.data.get("font_size"), font_path=font)]
+                                  font_size=call.data.get("font_size"), font_path=font, model=model)]
             except ProtocolError as err:
                 raise HomeAssistantError(str(err)) from err
         await coord.async_print(render, **_job_args(call))
@@ -130,9 +130,9 @@ def async_register_services(hass: HomeAssistant) -> None:
         coord = _coordinator(hass, call)
         data = await _load_image_bytes(hass, call)
 
-        def render(mm: int):
+        def render(mm: int, model: int):
             try:
-                return [render_image(data, mm, dither=call.data["dither"])]
+                return [render_image(data, mm, dither=call.data["dither"], model=model)]
             except (OSError, ProtocolError) as err:
                 raise HomeAssistantError(f"cannot use image: {err}") from err
         await coord.async_print(render, **_job_args(call))
@@ -152,12 +152,10 @@ def async_register_services(hass: HomeAssistant) -> None:
             if status is None or not status.has_tape:
                 raise HomeAssistantError("No compatible tape loaded in the printer") from None
             try:
-                design = templates.build_template(ref, status.media_width)
+                design = templates.build_template(ref, status.media_width, status.model)
             except PtouchError as err:
                 raise HomeAssistantError(str(err)) from err
-        await async_print_design(hass, coord, design, call.data["variables"], copies=call.data["copies"],
-                                 auto_cut=call.data["auto_cut"], cut_each=call.data["cut_each"],
-                                 margin_mm=call.data["margin_mm"])
+        await async_print_design(hass, coord, design, call.data["variables"], **_job_args(call))
 
     hass.services.async_register(DOMAIN, "print_template", print_template, schema=TEMPLATE_SCHEMA)
     hass.services.async_register(DOMAIN, "print_text", print_text, schema=TEXT_SCHEMA)

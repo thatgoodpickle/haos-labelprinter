@@ -7,6 +7,7 @@ CONF_ADDRESS = "address"
 CONF_CHANNEL = "channel"
 CONF_URL = "url"
 CONF_TOKEN = "token"
+CONF_MODEL = "model"          # status byte 4, kept for when the printer is offline
 
 TRANSPORT_USB = "usb"
 TRANSPORT_BLUETOOTH = "bluetooth"
@@ -27,6 +28,8 @@ POLL_WAKE_SECONDS = 8.0       # polling gives up quickly: it must not keep a sle
 # Failure reasons shared with ptouch.btadmin / TransportError.reason (docs/BLUETOOTH_CONTRACT.md section 1)
 REASON_OK = "ok"
 REASON_ERROR = "error"
+# Switched off or held by another device: expected, so logged as a warning
+OFFLINE_REASONS = frozenset({"asleep", "busy"})
 REASON_MESSAGES = {
     "asleep": "The printer isn't answering. Press its power button to switch it on, make sure no phone is "
               "connected to it, then try again.",

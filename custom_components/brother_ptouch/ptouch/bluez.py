@@ -7,6 +7,10 @@ container), we register a client ``org.bluez.Profile1`` for the Serial Port
 UUID, ask BlueZ to ``ConnectProfile`` and receive the connected RFCOMM file
 descriptor in ``NewConnection``.
 
+BlueZ allows one registered profile per UUID: if another program holds the
+Serial Port one, the transport falls back to a plain RFCOMM socket on
+``channel``.
+
 The printer must already be paired/trusted in BlueZ (see ``btadmin.pair`` or
 ``bluetoothctl``). ``wake_timeout`` (seconds, ``None`` = 12) bounds the total
 time spent retrying ``ConnectProfile``; failures raise ``TransportError`` with a
@@ -22,7 +26,7 @@ import time
 
 from . import _bluez_common as _c
 from .errors import TransportError
-from .transport import RFCOMMTransport
+from .transport import DEFAULT_RFCOMM_CHANNEL, RFCOMMTransport
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -41,8 +45,9 @@ def available() -> bool:
 class BlueZTransport(RFCOMMTransport):
     """RFCOMM link obtained through BlueZ D-Bus; I/O reuses RFCOMMTransport."""
 
-    def __init__(self, address: str, profile_uuid: str = SPP_UUID, bus_address: str | None = None) -> None:
-        super().__init__(address)
+    def __init__(self, address: str, profile_uuid: str = SPP_UUID, bus_address: str | None = None,
+                 channel: int = DEFAULT_RFCOMM_CHANNEL) -> None:
+        super().__init__(address, channel)  # channel: only for the plain-socket fallback
         self._uuid = profile_uuid
         self._bus_address = bus_address  # None = the system bus; tests pass a private bus
         self._loop: asyncio.AbstractEventLoop | None = None
@@ -74,6 +79,11 @@ class BlueZTransport(RFCOMMTransport):
         except _c.LinkError as err:
             _LOGGER.debug("BlueZ connect to %s failed (%s): %s", self._address, err.reason, err.detail)
             self._close()
+            if err.reason == "profile_taken":
+                _LOGGER.debug("Serial Port profile is taken; using an RFCOMM socket on channel %d",
+                              self._channel)
+                super()._open()
+                return
             raise TransportError(err.message, reason=err.reason) from err
         except Exception as err:  # noqa: BLE001
             _LOGGER.debug("BlueZ connect to %s failed: %r", self._address, err)

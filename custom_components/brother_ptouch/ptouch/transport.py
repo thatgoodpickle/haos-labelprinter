@@ -365,11 +365,12 @@ def make_transport(kind: str, **cfg) -> Transport:
         if addr.startswith("/"):
             return DeviceFileTransport(addr)
         backend = cfg.get("backend") or "auto"   # auto | dbus | socket
+        channel = int(cfg.get("channel") or DEFAULT_RFCOMM_CHANNEL)
         if backend != "socket":
             from . import bluez
             if backend == "dbus" or bluez.available():
-                return bluez.BlueZTransport(addr)
-        return RFCOMMTransport(addr, int(cfg.get("channel") or DEFAULT_RFCOMM_CHANNEL))
+                return bluez.BlueZTransport(addr, channel=channel)
+        return RFCOMMTransport(addr, channel)
     if kind == "bridge":
         return HTTPTransport(cfg["url"], cfg.get("token") or None)
     raise PtouchError(f"unknown transport {kind!r}")

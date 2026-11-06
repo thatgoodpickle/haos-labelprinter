@@ -27,6 +27,7 @@ Short answer: it is **verified on the PT-P710BT only**. Other models might work,
 | **PT-P710BT** | Verified by the maintainer | USB, Bluetooth and network bridge |
 | **PT-P700** | Should work, untested | The code recognises its USB ID |
 | **PT-P750W** | Should work, untested | The code recognises its USB ID |
+| **PT-P300BT** | Reported working by users | Bluetooth only. 64 dots on 12 mm tape; cut by hand, with chain printing, cut marks and Feed |
 | Other Brother P-touch (PT-E, PT-H, PT-P9xx) | Unknown, please test and report | Not promised to work |
 
 Brother **QL** printers (the shipping and address label printers) are a different product line. They are **not supported**.

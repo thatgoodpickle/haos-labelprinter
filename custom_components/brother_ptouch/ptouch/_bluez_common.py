@@ -37,6 +37,7 @@ FRIENDLY = {
     "pairing_timeout": "Pairing timed out. Switch the printer on, keep it close and try again.",
     "not_found": "The printer wasn't found. Switch it on, keep it close and scan again.",
     "permission": "Home Assistant isn't allowed to use Bluetooth on this host.",
+    "profile_taken": "Another program on this host has registered the Serial Port profile with BlueZ.",
     "error": "Bluetooth connection failed.",
 }
 
@@ -248,6 +249,10 @@ async def spp_connect(bus, address, profile_uuid=SPP_UUID, timeout=DEFAULT_WAKE_
             }])
     except DBusError as err:
         bus.unexport(profile_path)
+        # BlueZ allows one Profile1 per UUID and answers NotPermitted "UUID already registered"
+        # when another program holds it; callers can fall back to a plain socket.
+        if "already registered" in (err.text or "").lower():
+            raise LinkError("profile_taken", detail=f"{err.type}: {err.text}") from err
         raise link_error_from_dbus(err) from err
 
     try:

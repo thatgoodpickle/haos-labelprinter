@@ -70,11 +70,13 @@ A P-touch wastes about 25 mm of blank tape (head-to-cutter distance) at the star
 
 - **Single-page strips.** A strip of several labels is sent as one page, not as several pages.
 - **Chain printing keeps the last page inside.** In chain mode the printer holds the last page in the machine; the job must end properly for it to come out and be cut.
+- **Chaining is opt-in.** A print may pass `chain` (`ESC i K` without bit 3: no feed at the end, so the next job starts right after) and, on printers without a cutter (`has_cutter` false in the `printers` rows), `cut_mark` (`ESC i M` bit 6, which prints a mark instead of cutting; each label then becomes its own job so every label ends with one). A batch only chains if every request in it asked to. `feed` sends a one-blank-line page without chaining to push a held label out (never a bare `0x1A`).
 - **A bare `0x1A` hangs the printer.** Never send the print command without page data. The printer faults into a flashing-red state until power-cycled.
 - **No `ESC @` in status polling.** Status requests deliberately do not send initialize.
 - **EBUSY retries.** The device can report busy right after a job; the transport retries.
 - **BlueZ D-Bus profile route.** Raw RFCOMM sockets are not needed; see above.
 - Printable pins per tape follow Brother's PT-P700 raster reference (9 mm = 50 pins, 39 margin, etc.).
+- Per-model differences key on the model code in status byte 4 (`MODEL_TAPE_GEOMETRY`, `MODELS_WITHOUT_CUTTER` in `ptouch/protocol.py`). Labels are rendered at print time from the live status, so the renderer always knows the model. Unknown codes use the PT-P7xx table. The PT-P300BT (`0x72`) prints 64 dots on 12 mm tape and has no cutter.
 - USB ID `04F9:20AF` is confirmed for the PT-P710BT. PT-P700 (`2061`) and PT-P750W (`2062`) are matched but untested.
 - Orientation: on the PT-P710BT the default (Normal) is correct. The **Orientation** option offers flips if another unit differs.
 

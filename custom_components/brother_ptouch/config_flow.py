@@ -14,7 +14,7 @@ from homeassistant.helpers.selector import (NumberSelector, NumberSelectorConfig
 from homeassistant.helpers.service_info.usb import UsbServiceInfo
 
 from . import btutil
-from .const import (CONF_WAKE_SECONDS, DEFAULT_WAKE_SECONDS, friendly_message, CONF_ADDRESS, CONF_BATCH_WINDOW, CONF_CHANNEL, CONF_ORIENTATION, DEFAULT_BATCH_WINDOW, CONF_TOKEN, CONF_TRANSPORT,
+from .const import (CONF_MODEL, CONF_WAKE_SECONDS, DEFAULT_WAKE_SECONDS, friendly_message, CONF_ADDRESS, CONF_BATCH_WINDOW, CONF_CHANNEL, CONF_ORIENTATION, DEFAULT_BATCH_WINDOW, CONF_TOKEN, CONF_TRANSPORT,
                     CONF_URL, CONF_USB_SERIAL, DEFAULT_ORIENTATION, DOMAIN, TRANSPORT_BLUETOOTH,
                     TRANSPORT_BRIDGE, TRANSPORT_USB)
 from .ptouch import DEFAULT_RFCOMM_CHANNEL, ORIENTATIONS, PtouchError, make_transport
@@ -75,13 +75,14 @@ class PTouchConfigFlow(ConfigFlow, domain=DOMAIN):
             transport = make_transport(cfg.pop(CONF_TRANSPORT), **cfg)
             if data[CONF_TRANSPORT] == TRANSPORT_BLUETOOTH:
                 transport.wake_timeout = float(DEFAULT_WAKE_SECONDS)
-            await self.hass.async_add_executor_job(transport.get_status)
+            status = await self.hass.async_add_executor_job(transport.get_status)
         except PtouchError as err:
             self._probe_reason = getattr(err, "reason", "error") or "error"
             self._probe_message = friendly_message(self._probe_reason, str(err))
             return self._probe_reason if self._probe_reason in SPECIFIC_ERRORS else "cannot_connect"
         except Exception:  # noqa: BLE001
             return "unknown"
+        data[CONF_MODEL] = status.model
         return None
 
     # -- programmatic setup (WebSocket printers/add) -------------------------------------------

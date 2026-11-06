@@ -40,6 +40,14 @@ print_text:
       default: false
       selector:
         boolean:
+    chain: &chain
+      default: false
+      selector:
+        boolean:
+    cut_mark: &cut_mark
+      default: false
+      selector:
+        boolean:
     margin_mm: &margin
       default: 2
       selector:
@@ -67,6 +75,8 @@ print_qr:
     copies: *copies
     auto_cut: *auto_cut
     cut_each: *cut_each
+    chain: *chain
+    cut_mark: *cut_mark
     margin_mm: *margin
 
 print_image:
@@ -87,6 +97,8 @@ print_image:
     copies: *copies
     auto_cut: *auto_cut
     cut_each: *cut_each
+    chain: *chain
+    cut_mark: *cut_mark
     margin_mm: *margin
 
 print_template:
@@ -104,4 +116,6 @@ print_template:
     copies: *copies
     auto_cut: *auto_cut
     cut_each: *cut_each
+    chain: *chain
+    cut_mark: *cut_mark
     margin_mm: *margin

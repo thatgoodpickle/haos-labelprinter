@@ -4,7 +4,7 @@ import re
 import pytest
 
 from ptouch.design import DesignError, design_warnings, normalize_design, render_design
-from ptouch.protocol import tape_pins
+from ptouch.protocol import MODEL_P300BT, tape_pins
 from ptouch.templates import (CATEGORIES, FONTS_USED, ICONS, TEMPLATE_VERSION, TemplateError,
                               build_template, list_templates, used_variables)
 
@@ -43,6 +43,15 @@ def test_render_each(tid, tape):
     assert ink(img) > 50
     # offline (assets=None) icons are legitimately unavailable; everything else must be clean
     assert [w for w in design_warnings(d, tape, variables={}) if "not available" not in w] == []
+
+
+@pytest.mark.parametrize("tid", [t["id"] for t in TEMPLATES if 12 in t["tapes"]])
+def test_render_each_p300bt(tid):
+    d = build_template(tid, 12, MODEL_P300BT)
+    img = render_design(d, 12, variables={}, model=MODEL_P300BT)
+    assert img.height == 64 and ink(img) > 50
+    assert [w for w in design_warnings(d, 12, variables={}, model=MODEL_P300BT)
+            if "not available" not in w] == []
 
 
 @pytest.mark.parametrize("tid,tape", CASES)

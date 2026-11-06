@@ -199,6 +199,8 @@ class ProfileManager(ServiceInterface):
     @method()
     def RegisterProfile(self, profile: "o", uuid: "s", options: "a{sv}"):  # noqa: N802,F821
         self.fake.calls.append(("RegisterProfile", uuid))
+        if self.fake.profile_taken:
+            raise DBusError("org.bluez.Error.NotPermitted", "UUID already registered")
         self.fake.profile = (self.fake.senders.get("RegisterProfile"), profile, uuid)
 
     @method()
@@ -220,6 +222,7 @@ class FakeBlueZ:
         self.discovering = False
         self.discovery_filter = None
         self.register_agent_error = None
+        self.profile_taken = False   # another program holds the SPP profile
         self.address = None
         self.bus = None
         self._daemon = None

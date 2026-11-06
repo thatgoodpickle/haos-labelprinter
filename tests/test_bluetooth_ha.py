@@ -275,12 +275,12 @@ async def test_connect_errors(hass, ws, tr):
     assert not r["success"] and "Bluetooth" in r["error"]["message"]
 
 
-async def test_connect_entry_that_failed_setup(hass, ws, tr):
+async def test_connect_entry_set_up_while_offline(hass, ws, tr):
     tr.down, tr.reason = True, "asleep"
     entry = MockConfigEntry(domain=DOMAIN, data=BT_DATA, unique_id=f"bt:{ADDR}", options={"batch_window": 0})
     entry.add_to_hass(hass)
     await hass.config_entries.async_setup(entry.entry_id)
-    assert entry.state.name == "SETUP_RETRY"
+    assert entry.state.name == "LOADED"                                 # offline printers still load
     rows = (await call(ws, "printers"))["result"]["printers"]
     assert rows[0]["online"] is False and rows[0]["reason"] == "asleep" and "power button" in rows[0]["message"]
     r = await call(ws, "bluetooth/connect", entry_id=entry.entry_id)
@@ -289,7 +289,7 @@ async def test_connect_entry_that_failed_setup(hass, ws, tr):
     r = await call(ws, "bluetooth/connect", entry_id=entry.entry_id)
     assert r["result"]["ok"] is True
     await hass.async_block_till_done()
-    assert entry.state.name == "LOADED"                                  # reloaded after waking
+    assert entry.state.name == "LOADED" and entry.data["model"] == 0    # connecting also learns the model
 
 
 async def test_button(hass, tr):
@@ -355,7 +355,7 @@ async def test_add_all_transports(hass, ws, tr, payload, expected, uid):
     r = await call(ws, "printers/add", **payload)
     assert r["success"], r
     entry = hass.config_entries.async_get_entry(r["result"]["entry_id"])
-    assert entry.data == expected and entry.unique_id == uid
+    assert entry.data == {**expected, "model": 0} and entry.unique_id == uid
     assert r["result"]["title"] == entry.title
     assert "sekret" not in json.dumps(r)
     rows = (await call(ws, "printers"))["result"]["printers"]
@@ -453,7 +453,8 @@ async def test_test_print_label_text(hass, ws, tr, monkeypatch):
     seen = []
     from custom_components.brother_ptouch import printer_api
     real = printer_api.render_text
-    monkeypatch.setattr(printer_api, "render_text", lambda text, tape: seen.append((text, tape)) or real(text, tape))
+    monkeypatch.setattr(printer_api, "render_text",
+                        lambda text, tape, **kw: seen.append((text, tape)) or real(text, tape, **kw))
     entry = await bt_entry(hass)
     r = await call(ws, "printers/test_print", entry_id=entry.entry_id)
     assert r["success"]
@@ -569,7 +570,7 @@ async def test_flow_scan_pick_pair_create(hass, bt, tr):
     assert [o["value"] for o in options] == [ADDR, PHONE] and "not paired" in options[0]["label"]
     r = await _settle(hass, await hass.config_entries.flow.async_configure(r["flow_id"], {"device": ADDR}))
     assert r["type"] is FlowResultType.CREATE_ENTRY
-    assert r["data"] == BT_DATA and r["title"] == "PT-P710BT1234"
+    assert r["data"] == {**BT_DATA, "model": 0} and r["title"] == "PT-P710BT1234"
     assert ("pair", ADDR, "0000") in bt.calls and r["result"].unique_id == f"bt:{ADDR}"
 
 
@@ -604,7 +605,7 @@ async def test_flow_rescan_and_manual_option(hass, bt, tr):
     assert r["type"] is FlowResultType.FORM and r["step_id"] == "bluetooth_manual"
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"address": "aa:bb:cc:dd:ee:09", "channel": 2})
     assert r["type"] is FlowResultType.CREATE_ENTRY
-    assert r["data"] == {"transport": "bluetooth", "address": "AA:BB:CC:DD:EE:09", "channel": 2}
+    assert r["data"] == {"transport": "bluetooth", "address": "AA:BB:CC:DD:EE:09", "channel": 2, "model": 0}
 
 
 async def test_flow_pick_nothing_and_scan_failure(hass, bt, tr):
@@ -630,7 +631,7 @@ async def test_flow_falls_back_to_manual_when_unavailable(hass, bt, tr, monkeypa
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"address": "nope", "channel": 1})
     assert r["errors"] == {"base": "invalid_address"}
     r = await hass.config_entries.flow.async_configure(r["flow_id"], {"address": ADDR.lower(), "channel": 1})
-    assert r["type"] is FlowResultType.CREATE_ENTRY and r["data"] == BT_DATA
+    assert r["type"] is FlowResultType.CREATE_ENTRY and r["data"] == {**BT_DATA, "model": 0}
 
 
 async def test_flow_manual_reports_reason_specific_error(hass, bt, tr):

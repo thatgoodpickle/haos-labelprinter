@@ -13,7 +13,11 @@ export const mmToDots = (mm) => Math.round(mm * DOTS_PER_MM);
 export const dotsToMm = (d) => d / DOTS_PER_MM;
 export const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 
-export function tapePins(tapeMm) {
+/** Printable dots across `tapeMm` tape. `pinsByTape` is a printer's `tape_pins` row
+ *  ({"12": 64, ...}), for models whose print head differs from the PT-P7xx defaults. */
+export function tapePins(tapeMm, pinsByTape) {
+  const own = pinsByTape?.[Number(tapeMm)];
+  if (own) return own;
   const t = TAPES.find((x) => x.value === Number(tapeMm));
   return t ? t.pins : 70;
 }
