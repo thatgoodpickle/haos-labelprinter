@@ -50,6 +50,22 @@ def test_returns_rfcomm_socket(fake):
     assert fake.profile is None and t._sock is None
 
 
+def test_profile_taken_falls_back_to_socket(fake, monkeypatch):
+    from ptouch.transport import RFCOMMTransport
+    fake.add_device(A, "PT-P300BT", paired=True)
+    fake.profile_taken = True
+    opened = []
+    monkeypatch.setattr(RFCOMMTransport, "_open", lambda self: opened.append((self._address, self._channel)))
+    t = BlueZTransport(A, bus_address=fake.address, channel=3)
+    t._open()
+    assert opened == [(A, 3)] and t._loop is None and fake.profile is None
+
+
+def test_make_transport_passes_channel():
+    from ptouch import make_transport
+    assert make_transport("bluetooth", address=A, channel=3, backend="dbus")._channel == 3
+
+
 def test_not_paired_reason(fake):
     t = transport(fake)
     with pytest.raises(TransportError) as e:

@@ -138,7 +138,7 @@ export const MOBILE_CSS = `
 .print-sheet .pv { background:#fff; border:1px solid var(--bp-line); border-radius:10px; height:84px; display:flex; align-items:center; justify-content:center; overflow:hidden; margin:2px 0 10px; }
 .print-sheet .pv img { max-width:100%; max-height:100%; object-fit:contain; }
 .pbody { display:flex; flex-direction:column; gap:10px; }
-.layer[data-mode=print] .print-sheet { display:block; }
+.layer[data-mode=print] .print-sheet, .layer[data-mode=cut] .cut-sheet { display:block; }
 .prow { display:flex; align-items:center; gap:12px; width:100%; min-height:56px; padding:8px 12px; border:1px solid var(--bp-line); border-radius:14px; background:var(--bp-card); text-align:left; cursor:pointer; }
 .prow.static { cursor:default; }
 .prow.warn { background:var(--bp-warn-bg); border-color:transparent; }

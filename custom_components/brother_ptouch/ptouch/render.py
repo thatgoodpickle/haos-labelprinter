@@ -55,8 +55,9 @@ def _fit_font(lines: list[str], max_h: int, font_path: str | None) -> ImageFont.
 
 
 def render_text(text: str, tape_mm: int, *, font_size: int | None = None,
-                font_path: str | None = None, align: str = "center") -> Image.Image:
-    pins = tape_pins(tape_mm)
+                font_path: str | None = None, align: str = "center",
+                model: int | None = None) -> Image.Image:
+    pins = tape_pins(tape_mm, model)
     lines = text.split("\n") or [""]
     avail = pins - 2 * _PAD_Y
     font = load_font(font_size, font_path) if font_size else _fit_font(lines, avail, font_path)
@@ -76,12 +77,13 @@ def render_text(text: str, tape_mm: int, *, font_size: int | None = None,
 
 
 def render_qr(data: str, tape_mm: int, *, text: str | None = None,
-              font_path: str | None = None, font_size: int | None = None) -> Image.Image:
+              font_path: str | None = None, font_size: int | None = None,
+              model: int | None = None) -> Image.Image:
     try:
         import segno
     except ImportError as err:  # pragma: no cover
         raise ProtocolError("segno is required for QR labels") from err
-    pins = tape_pins(tape_mm)
+    pins = tape_pins(tape_mm, model)
     qr = segno.make(data, error="m", micro=False)
     n = qr.symbol_size(scale=1, border=0)[0]
     avail = pins - 2 * _PAD_Y
@@ -94,7 +96,8 @@ def render_qr(data: str, tape_mm: int, *, text: str | None = None,
         raise ProtocolError("QR code too large for this tape; use shorter data or wider tape")
     parts = [code]
     if text:
-        parts.append(render_text(text, tape_mm, font_size=font_size, font_path=font_path, align="left"))
+        parts.append(render_text(text, tape_mm, font_size=font_size, font_path=font_path, align="left",
+                                 model=model))
     gap = 8
     img = Image.new("1", (_PAD_X + sum(p.width for p in parts) + gap * (len(parts) - 1) + _PAD_X, pins), 1)
     x = _PAD_X
@@ -104,8 +107,9 @@ def render_qr(data: str, tape_mm: int, *, text: str | None = None,
     return img
 
 
-def render_image(src: Image.Image | bytes, tape_mm: int, *, dither: bool = True) -> Image.Image:
-    pins = tape_pins(tape_mm)
+def render_image(src: Image.Image | bytes, tape_mm: int, *, dither: bool = True,
+                 model: int | None = None) -> Image.Image:
+    pins = tape_pins(tape_mm, model)
     if isinstance(src, (bytes, bytearray)):
         src = Image.open(io.BytesIO(src))
     if src.mode in ("RGBA", "LA", "P"):

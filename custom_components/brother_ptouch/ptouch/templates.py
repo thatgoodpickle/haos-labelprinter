@@ -75,9 +75,9 @@ class TemplateError(PtouchError):
 class Geo:
     """Tape geometry: H = pins; m = margin; the inner band is y0..y0+ih."""
 
-    def __init__(self, tape_mm: int):
+    def __init__(self, tape_mm: int, model: int | None = None):
         self.tape = tape_mm
-        self.H = tape_pins(tape_mm)
+        self.H = tape_pins(tape_mm, model)
         self.m = max(2, round(self.H * 0.07))
         self.g = max(2, round(self.H * 0.04))
         self.y0 = self.m
@@ -623,8 +623,8 @@ def _get(template_id: str) -> _Tpl:
         raise TemplateError(f"unknown template: {template_id!r}") from None
 
 
-def build_template(template_id: str, tape_mm: int) -> dict:
-    """Return a design (contract section 1) for *template_id* sized for *tape_mm*.
+def build_template(template_id: str, tape_mm: int, model: int | None = None) -> dict:
+    """Return a design (contract section 1) for *template_id* sized for *tape_mm* on printer *model*.
 
     *tape_mm* is the tape width as the printer reports it (4 for 3.5 mm tape; 3.5 is accepted too).
     Raises TemplateError for an unknown id or a tape the template does not support.
@@ -635,7 +635,7 @@ def build_template(template_id: str, tape_mm: int) -> dict:
         raise TemplateError(
             f"template {template_id!r} does not support {tape_mm} mm tape "
             f"(supported: {', '.join(str(t) for t in tpl.tapes)})")
-    geo = Els(), Geo(tape)
+    geo = Els(), Geo(tape, model)
     els, g = geo
     tpl.build(g, els)
     return {

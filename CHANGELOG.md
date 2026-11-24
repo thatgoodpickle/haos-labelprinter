@@ -3,6 +3,18 @@
 All notable changes to this project are documented here.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Added
+- **PT-P300BT support.** The printer reports its model in the status, and labels are sized for it: its print head is 64 dots tall, so 12 mm tape gets 64 printable dots instead of 70. It has no cutter, so no cut is requested (on this model that only prints a cut mark). The editor canvas uses the selected printer's dots per tape width.
+- **Cutting and feed in the editor.** Next to Copies (on phones: in the menu and the print sheet), the editor offers **Chain** (no feed after a print, so the next label follows right after it instead of ~25 mm later; the last label stays inside until the next print or Feed), **Auto cut** (printers with a cutter) or **Cut marks** (a mark after every label, printers without one) and **Feed** (feeds the tape out). The choices are remembered per browser. The print services take `chain` and `cut_mark`, and printers without a cutter get a **Feed tape** button entity.
+
+### Changed
+- **A printer that is off no longer fails the integration's setup.** The entry loads and the device shows as unavailable until the printer answers. A printer that is switched off or held by another device is logged as a warning; other connection problems stay errors. The printer's model is remembered, so model-specific behaviour is there even when it is off at startup.
+
+### Fixed
+- Bluetooth printers could not be reached when another program on the host had registered the Serial Port profile with BlueZ: BlueZ allows one per UUID, so connecting failed with "Could not talk to the printer". The connection now falls back to a plain RFCOMM socket on the configured channel.
+
 ## [0.3.1]
 
 ### Changed

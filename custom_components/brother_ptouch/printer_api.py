@@ -16,12 +16,10 @@ from .const import (CONF_ADDRESS, CONF_CHANNEL, CONF_TRANSPORT, CONF_URL, CONF_U
                     REASON_ERROR, REASON_OK, TRANSPORT_BLUETOOTH, TRANSPORT_BRIDGE, TRANSPORT_USB,
                     friendly_message)
 from .editor_api import find_coordinator
-from .ptouch import render_text
+from .ptouch import TAPE_GEOMETRY, has_cutter, render_text, tape_pins
+from .ptouch.protocol import MODEL_NAMES
 
 _LOGGER = logging.getLogger(__name__)
-
-STASH_KEY = DOMAIN + "_setup_failures"      # entry_id -> (reason, message) for entries that failed to set up
-
 
 def _pretty(name: str) -> str:
     return str(name).replace("_", " ")
@@ -30,12 +28,12 @@ def _pretty(name: str) -> str:
 def printer_rows(hass: HomeAssistant) -> list[dict]:
     """Rows of the `printers` command. The token is never included."""
     rows = []
-    stash = hass.data.get(STASH_KEY, {})
     for entry in hass.config_entries.async_entries(DOMAIN):
         data = entry.data
         row: dict[str, Any] = {
             "entry_id": entry.entry_id, "title": entry.title, "name": entry.title,
-            "transport": data.get(CONF_TRANSPORT), "tape_mm": None, "tape": None,
+            "transport": data.get(CONF_TRANSPORT), "model": None, "has_cutter": None, "tape_pins": None,
+            "tape_mm": None, "tape": None,
             "state": "offline", "online": False, "reason": REASON_ERROR, "message": ""}
         for key, conf in (("address", CONF_ADDRESS), ("url", CONF_URL), ("serial", CONF_USB_SERIAL)):
             if data.get(conf):
@@ -46,6 +44,10 @@ def printer_rows(hass: HomeAssistant) -> list[dict]:
             row["reason"] = REASON_OK if row["online"] else (coord.last_reason or REASON_ERROR)
             status = coord.data
             row["state"] = "offline" if not row["online"] else getattr(status, "state", "idle")
+            if (model := coord.model) is not None:   # also known while the printer is offline
+                row["model"] = MODEL_NAMES.get(model)
+                row["has_cutter"] = has_cutter(model)
+                row["tape_pins"] = {mm: tape_pins(mm, model) for mm in TAPE_GEOMETRY}
             if status is not None and getattr(status, "has_tape", False):
                 width = int(status.media_width)
                 row["tape_mm"] = width
@@ -56,9 +58,7 @@ def printer_rows(hass: HomeAssistant) -> list[dict]:
             if not row["online"]:
                 row["message"] = coord.last_message or friendly_message(row["reason"], "")
         else:
-            reason, message = stash.get(entry.entry_id, (REASON_ERROR, ""))
-            row["reason"] = reason
-            row["message"] = message or friendly_message(reason, "The printer could not be reached.")
+            row["message"] = friendly_message(REASON_ERROR, "The printer could not be reached.")
         rows.append(row)
     return rows
 
@@ -104,10 +104,10 @@ async def ws_rename(hass, connection, msg):
 
 
 # -- test print ------------------------------------------------------------------------------
-def _test_label(tape_mm: int):
+def _test_label(tape_mm: int, model: int):
     width = "3.5" if tape_mm == 4 else str(tape_mm)
     text = f"Printer OK\n{dt_util.now().strftime('%Y-%m-%d')}  {width} mm"
-    return [render_text(text, tape_mm)]
+    return [render_text(text, tape_mm, model=model)]
 
 
 @_cmd({vol.Required("type"): "brother_ptouch/printers/test_print", vol.Required("entry_id"): str})

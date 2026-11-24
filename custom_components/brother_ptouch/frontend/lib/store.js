@@ -11,8 +11,8 @@ export function emptyDesign() {
 }
 
 /** Defaults for a new element of `type` placed after the current content. */
-export function newElement(type, design, tapeMm, imageInfo) {
-  const H = tapePins(tapeMm);
+export function newElement(type, design, tapeMm, imageInfo, pinsByTape) {
+  const H = tapePins(tapeMm, pinsByTape);
   let x = 0;
   for (const e of design.elements) x = Math.max(x, e.x + e.w + 6);
   const base = { id: uid(), type, x, y: 0, w: H, h: H, rotation: 0, invert: false };

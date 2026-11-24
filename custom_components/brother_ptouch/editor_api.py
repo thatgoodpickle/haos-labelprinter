@@ -167,21 +167,23 @@ async def async_resolve_templates(hass: HomeAssistant, design: dict,
     return resolved, warnings
 
 
-def _render_callable(resolved: dict, assets: Any) -> Callable[[int], list]:
+def _render_callable(resolved: dict, assets: Any) -> Callable[[int, int], list]:
     render_design = _design_module().render_design
 
-    def render(tape_mm: int) -> list:
-        return [render_design(resolved, tape_mm, variables=None, assets=assets)]
+    def render(tape_mm: int, model: int) -> list:
+        return [render_design(resolved, tape_mm, variables=None, assets=assets, model=model)]
     return render
 
 
 async def async_print_design(hass: HomeAssistant, coordinator: Any, design: dict,
                              variables: dict | None, *, copies: int = 1, auto_cut: bool = True,
-                             cut_each: bool = False, margin_mm: float = 2.0) -> None:
+                             cut_each: bool = False, margin_mm: float = 2.0, chain: bool = False,
+                             cut_mark: bool = False) -> None:
     resolved, _warnings = await async_resolve_templates(hass, design, variables)
     assets = await async_get_assets(hass)
     await coordinator.async_print(_render_callable(resolved, assets), copies=copies,
-                                  auto_cut=auto_cut, cut_each=cut_each, margin_mm=margin_mm)
+                                  auto_cut=auto_cut, cut_each=cut_each, margin_mm=margin_mm,
+                                  chain=chain, cut_mark=cut_mark)
 
 
 def _loaded_coordinators(hass: HomeAssistant) -> list:
@@ -202,11 +204,12 @@ def find_coordinator(hass: HomeAssistant, entry_id: str | None) -> Any:
     return entries[0].runtime_data
 
 
-def _loaded_tape(entry: Any) -> int | None:
-    status = getattr(entry.runtime_data, "data", None)
-    if status is not None and getattr(status, "has_tape", False):
-        return int(status.media_width)
-    return None
+def _loaded_coordinator(hass: HomeAssistant, entry_id: str | None) -> Any:
+    """Coordinator of the printer *entry_id* (or of the only printer), else None."""
+    entries = _loaded_coordinators(hass)
+    if entry_id:
+        entries = [e for e in entries if e.entry_id == entry_id]
+    return entries[0].runtime_data if len(entries) == 1 else None
 
 
 def _png_b64(img: Any) -> str:
@@ -215,11 +218,12 @@ def _png_b64(img: Any) -> str:
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 
-def _preview_sync(resolved: dict, tape_mm: int, assets: Any) -> tuple[Any, list[str]]:
+def _preview_sync(resolved: dict, tape_mm: int, assets: Any,
+                  model: int | None = None) -> tuple[Any, list[str]]:
     mod = _design_module()
-    img = mod.render_design(resolved, tape_mm, variables=None, assets=assets)
+    img = mod.render_design(resolved, tape_mm, variables=None, assets=assets, model=model)
     try:
-        warnings = list(mod.design_warnings(resolved, tape_mm, assets=assets))
+        warnings = list(mod.design_warnings(resolved, tape_mm, assets=assets, model=model))
     except Exception as err:  # noqa: BLE001
         _LOGGER.debug("design_warnings failed: %s", err)
         warnings = []
@@ -326,17 +330,16 @@ async def ws_delete(hass, connection, msg):
     vol.Optional("variables"): dict,
 })
 async def ws_preview(hass, connection, msg):
+    coord = _loaded_coordinator(hass, msg.get("entry_id"))
+    status, model = getattr(coord, "data", None), getattr(coord, "model", None)
     if "tape_mm" in msg:
         tape_mm = _norm_tape(msg["tape_mm"])
     else:
-        entries = _loaded_coordinators(hass)
-        if msg.get("entry_id"):
-            entries = [e for e in entries if e.entry_id == msg["entry_id"]]
-        tape = _loaded_tape(entries[0]) if len(entries) == 1 else None
+        tape = int(status.media_width) if getattr(status, "has_tape", False) else None
         tape_mm = tape if tape in TAPE_GEOMETRY else DEFAULT_TAPE_MM
     resolved, warnings = await async_resolve_templates(hass, msg["design"], msg.get("variables"))
     assets = await async_get_assets(hass)
-    img, more = await hass.async_add_executor_job(_preview_sync, resolved, tape_mm, assets)
+    img, more = await hass.async_add_executor_job(_preview_sync, resolved, tape_mm, assets, model)
     png = await hass.async_add_executor_job(_png_b64, img)
     connection.send_result(msg["id"], {
         "png": png, "width": img.width, "height": img.height, "tape_mm": tape_mm,
@@ -350,6 +353,9 @@ async def ws_preview(hass, connection, msg):
     vol.Optional("entry_id"): str,
     vol.Optional("variables"): dict,
     vol.Optional("copies", default=1): vol.All(vol.Coerce(int), vol.Range(min=1, max=20)),
+    vol.Optional("auto_cut", default=True): bool,
+    vol.Optional("chain", default=False): bool,
+    vol.Optional("cut_mark", default=False): bool,     # printers without a cutter
 })
 async def ws_print(hass, connection, msg):
     if ("design" in msg) == ("design_id" in msg):
@@ -360,7 +366,15 @@ async def ws_print(hass, connection, msg):
         data = await async_get_data(hass)
         design = _need(data.designs, msg["design_id"])
     coord = find_coordinator(hass, msg.get("entry_id"))
-    await async_print_design(hass, coord, design, msg.get("variables"), copies=msg["copies"])
+    await async_print_design(hass, coord, design, msg.get("variables"), copies=msg["copies"],
+                             auto_cut=msg["auto_cut"], chain=msg["chain"], cut_mark=msg["cut_mark"])
+    connection.send_result(msg["id"], {})
+
+
+@_command({vol.Required("type"): "brother_ptouch/feed", vol.Optional("entry_id"): str})
+async def ws_feed(hass, connection, msg):
+    """Feed the tape out, e.g. to release a chained label."""
+    await find_coordinator(hass, msg.get("entry_id")).async_feed()
     connection.send_result(msg["id"], {})
 
 
@@ -437,11 +451,13 @@ async def ws_templates_build(hass, connection, msg):
         coord = find_coordinator(hass, msg.get("entry_id"))
         status = getattr(coord, "data", None)
         tape = status.media_width if status is not None and status.has_tape else 12
-    design = templates.build_template(msg["template_id"], tape)
+    else:
+        coord = _loaded_coordinator(hass, msg.get("entry_id"))
+    design = templates.build_template(msg["template_id"], tape, getattr(coord, "model", None))
     connection.send_result(msg["id"], {"design": design, "tape_mm": tape})
 
 
-COMMANDS = (ws_printers, ws_list, ws_get, ws_save, ws_delete, ws_preview, ws_print,
+COMMANDS = (ws_printers, ws_list, ws_get, ws_save, ws_delete, ws_preview, ws_print, ws_feed,
             ws_fonts_search, ws_fonts_ensure, ws_icons_search, ws_templates_list,
             ws_templates_build)
 

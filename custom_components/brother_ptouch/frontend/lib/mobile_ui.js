@@ -304,9 +304,12 @@ export function createMobile(p, t) {
       return;
     }
     if (p.s.printDone) {
+      const held = !!p._lastPrint?.chain;     // chain printing: the label is still inside
       pbody.replaceChildren(
         h("div", { class: "pstate ok", role: "status" }, icon("mdi:check-circle-outline"), h("strong", {}, t("Sent to the printer")),
-          h("span", {}, p.s.printDone > 1 ? `${p.s.printDone} ${t("labels")}` : t("Take your label from the printer."))),
+          h("span", {}, held ? t("The label stays in the printer until the next print or Feed.")
+            : p.s.printDone > 1 ? `${p.s.printDone} ${t("labels")}` : t("Take your label from the printer."))),
+        ...(held ? [feedButton()] : []),
         h("button", { class: "btn big primary", type: "button", onClick: () => p._closeLayer() }, t("Done")));
       return;
     }
@@ -323,8 +326,31 @@ export function createMobile(p, t) {
     const minus = h("button", { class: "ibtn step", type: "button", "aria-label": t("Fewer copies"), disabled: copies <= 1, onClick: () => { p.s.copies = M.stepCopies(p.s.copies, -1); p.$.copies.value = p.s.copies; m.renderPrint(); } }, icon("mdi:minus"));
     const plus = h("button", { class: "ibtn step", type: "button", "aria-label": t("More copies"), disabled: copies >= 20, onClick: () => { p.s.copies = M.stepCopies(p.s.copies, 1); p.$.copies.value = p.s.copies; m.renderPrint(); } }, icon("mdi:plus"));
     rows.push(h("div", { class: "prow static" }, h("span", { class: "prow-t" }, h("strong", {}, t("Copies"))), h("div", { class: "stepper" }, minus, h("output", { "aria-live": "polite" }, String(copies)), plus)));
+    rows.push(...cuttingRows());
     rows.push(h("button", { class: "btn big primary go", type: "button", disabled: !d.elements.length || !pr, onClick: () => p._startPrint() }, icon("mdi:printer"), tapeMismatch ? t("Print anyway") : copies > 1 ? `${t("Print")} ${copies} ${t("labels")}` : t("Print")));
     pbody.replaceChildren(...rows);
+  };
+  const cutToggle = (key, label, hint) => {
+    const box = h("input", { type: "checkbox", "aria-label": label, onChange: () => p._setCutting(key, box.checked) });
+    box.checked = !!p.s[key];
+    return h("label", { class: "prow static" }, h("span", { class: "prow-t" }, h("strong", {}, label), h("span", {}, hint)), box);
+  };
+  const feedButton = () => h("button", { class: "btn big", type: "button", disabled: !!p._feeding, onClick: () => p._feed() },
+    icon("mdi:arrow-expand-right"), p._feeding ? t("Feeding…") : t("Feed tape"));
+  const cuttingRows = () => {
+    const cut = p.cutOption;
+    return [cutToggle("chain", t("Chain"), t("No feed between prints. The label stays inside until the next print or Feed.")),
+      cutToggle(cut.key, cut.label, cut.hint), feedButton()];
+  };
+
+  // ---- cutting and feed sheet (editor menu) ----------------------------------------------------------------------
+  const cbody = h("div", { class: "pbody" });
+  m.cutSheet = h("div", { class: "msheet cut-sheet", role: "dialog", "aria-label": t("Cutting and feed") },
+    h("h3", {}, h("span", { class: "grow" }, t("Cutting and feed")), iconButton("mdi:close", t("Close"), () => p._closeLayer())),
+    cbody);
+  m.renderCut = () => {
+    if ($.layer.dataset.mode !== "cut") return;
+    cbody.replaceChildren(...cuttingRows());
   };
 
   // ---- action sheet (editor menu, label card menu) ---------------------------------------------------------------------------

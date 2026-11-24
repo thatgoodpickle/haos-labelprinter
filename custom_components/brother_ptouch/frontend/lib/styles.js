@@ -38,6 +38,8 @@ input, textarea { -webkit-user-select:text; user-select:text; -webkit-touch-call
 .topbar .spacer { flex:1 1 0; }
 .tb-group { display:flex; align-items:center; gap:6px; }
 .tb-group label.small { color:var(--bp-text2); font-size:12px; }
+.tb-check { display:inline-flex; align-items:center; gap:4px; }
+.tb-check input { margin:0; }
 .dirty-dot { width:8px; height:8px; border-radius:50%; background:var(--bp-warn); display:none; flex:none; }
 .dirty .dirty-dot { display:inline-block; }
 

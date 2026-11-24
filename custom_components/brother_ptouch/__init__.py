@@ -2,11 +2,9 @@
 from __future__ import annotations
 
 from homeassistant.const import Platform
-from homeassistant.exceptions import ConfigEntryNotReady
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN
 from .editor_api import async_setup_editor
 from .coordinator import PTouchConfigEntry, PTouchCoordinator
 from .services import async_register_services
@@ -22,13 +20,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
 
 async def async_setup_entry(hass: HomeAssistant, entry: PTouchConfigEntry) -> bool:
     coordinator = PTouchCoordinator(hass, entry)
-    stash = hass.data.setdefault(DOMAIN + "_setup_failures", {})
-    try:
-        await coordinator.async_config_entry_first_refresh()
-    except ConfigEntryNotReady:
-        stash[entry.entry_id] = (coordinator.last_reason, coordinator.last_message)   # for the `printers` rows
-        raise
-    stash.pop(entry.entry_id, None)
+    await coordinator.async_refresh()   # an offline printer still loads; its entities are unavailable
     entry.runtime_data = coordinator
     # Reload only for real changes: renaming a printer (title) must not interrupt it.
     coordinator.config_snapshot = (dict(entry.data), dict(entry.options))

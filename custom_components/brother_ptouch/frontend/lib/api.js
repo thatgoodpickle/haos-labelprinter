@@ -14,14 +14,19 @@ export class Api {
     if (variables && Object.keys(variables).length) msg.variables = variables;
     return this.call("preview", msg);
   }
-  print({ design, id, entry_id, variables, copies }) {
+  print({ design, id, entry_id, variables, copies, chain, cutMark, autoCut }) {
     const msg = {};
     if (id) msg.design_id = id; else msg.design = design;
     if (entry_id) msg.entry_id = entry_id;
     if (variables && Object.keys(variables).length) msg.variables = variables;
     if (copies && copies > 1) msg.copies = copies;
+    if (chain) msg.chain = true;
+    if (cutMark) msg.cut_mark = true;
+    if (autoCut === false) msg.auto_cut = false;
     return this.call("print", msg);
   }
+  /** Feed the tape out, e.g. to release a chained label. */
+  feed(entry_id) { return this.call("feed", entry_id ? { entry_id } : {}); }
   searchFonts(query = "", category = null, limit = 40) {
     const msg = { query, limit }; if (category) msg.category = category;
     return this.call("fonts/search", msg).then((r) => r.fonts);

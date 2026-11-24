@@ -662,9 +662,10 @@ def _paste(canvas: Image.Image, layer: Image.Image, x: int, y: int, opaque: bool
         canvas.paste(ImageChops.lighter(region, part), (x0, y0))
 
 
-def _render(design: dict, tape_mm: int, variables: dict | None, assets: Any) -> tuple[Image.Image, list[str]]:
+def _render(design: dict, tape_mm: int, variables: dict | None, assets: Any,
+            model: int | None = None) -> tuple[Image.Image, list[str]]:
     try:
-        pins = tape_pins(tape_mm)
+        pins = tape_pins(tape_mm, model)
     except PtouchError as err:
         raise DesignError(str(err)) from err
     d = normalize_design(design)
@@ -714,10 +715,11 @@ def _render(design: dict, tape_mm: int, variables: dict | None, assets: Any) -> 
 
 
 def render_design(design: dict, tape_mm: int, *, variables: dict | None = None,
-                  assets=None) -> Image.Image:
-    """Render *design* for *tape_mm* tape; returns a mode "1" image of height tape_pins(tape_mm)."""
+                  assets=None, model: int | None = None) -> Image.Image:
+    """Render *design* for *tape_mm* tape on printer *model*; returns a mode "1" image of
+    height tape_pins(tape_mm, model)."""
     try:
-        img, _ = _render(design, tape_mm, variables, assets)
+        img, _ = _render(design, tape_mm, variables, assets, model)
     except PtouchError:
         raise
     except MemoryError as err:
@@ -728,10 +730,10 @@ def render_design(design: dict, tape_mm: int, *, variables: dict | None = None,
 
 
 def design_warnings(design: dict, tape_mm: int, *, variables: dict | None = None,
-                    assets=None) -> list[str]:
+                    assets=None, model: int | None = None) -> list[str]:
     """Human-readable problems (element outside the label, text clipped, bad barcode ...)."""
     try:
-        return _render(design, tape_mm, variables, assets)[1]
+        return _render(design, tape_mm, variables, assets, model)[1]
     except PtouchError as err:
         return [str(err)]
     except Exception as err:  # noqa: BLE001

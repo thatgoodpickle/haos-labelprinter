@@ -8,6 +8,10 @@ let n = 0; const t = async (name, fn) => { await fn(); n++; console.log("ok -", 
 await t("tapePins / labels", () => {
   assert.equal(G.tapePins(12), 70); assert.equal(G.tapePins(4), 24); assert.equal(G.tapePins(24), 128);
   assert.equal(G.tapeLabel(4), "3.5 mm");
+  // a printer's own tape_pins row wins; missing widths fall back
+  const own = { 4: 24, 6: 32, 9: 50, 12: 64, 18: 112, 24: 128 };
+  assert.equal(G.tapePins(12, own), 64); assert.equal(G.tapePins(9, own), 50);
+  assert.equal(G.tapePins(12, { 4: 24 }), 70); assert.equal(G.tapePins(12, null), 70);
 });
 await t("mm/dots", () => { assert.equal(G.mmToDots(25.4), 180); assert.ok(Math.abs(G.dotsToMm(180) - 25.4) < 1e-9); });
 await t("label length auto/fixed", () => {
@@ -88,6 +92,7 @@ await t("newElement defaults per type", () => {
   }
   assert.equal(newElement("image", d, 24, { w: 400, h: 256, src: "x" }).h, 128);
   assert.equal(newElement("line", d, 12).type, "rect");
+  assert.equal(newElement("icon", d, 12, null, { 12: 64 }).h, 64);
 });
 await t("previewer drops stale responses", async () => {
   const got = []; let call = 0;
